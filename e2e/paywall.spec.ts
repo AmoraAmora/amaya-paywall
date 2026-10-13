@@ -54,6 +54,23 @@ test.describe('paywall', () => {
     expect(requests).toBe(1)
   })
 
+  test('retries a dropped purchase request with the same Idempotency-Key', async ({ page }) => {
+    const keys: string[] = []
+    await page.route('**/api/purchase', async (route) => {
+      keys.push(route.request().headers()['idempotency-key'] ?? '')
+      // First attempt "loses" the response, the automatic retry goes through.
+      if (keys.length === 1) return route.fulfill({ status: 503, body: '{}' })
+      return route.continue()
+    })
+    await page.goto('/')
+    await cta(page).click()
+
+    await expect(page.getByText('Purchase complete')).toBeVisible()
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toMatch(/^[\w-]{8,}$/)
+    expect(keys[1]).toBe(keys[0])
+  })
+
   test('shows a spinner while the purchase is in flight', async ({ page }) => {
     await page.route('**/api/purchase', async (route) => {
       await new Promise(r => setTimeout(r, 800))

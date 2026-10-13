@@ -7,8 +7,15 @@ const bodySchema = z.object({
   deviceId: z.uuid(),
 })
 
+const idempotencyKeySchema = z.string().regex(/^[\w-]{8,128}$/).optional()
+
 export default defineEventHandler(async (event): Promise<PurchaseResponse> => {
   await applySimulation(event)
+
+  const key = idempotencyKeySchema.safeParse(getHeader(event, 'idempotency-key'))
+  if (!key.success) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid Idempotency-Key header' })
+  }
 
   const parsed = bodySchema.safeParse(await readBody(event).catch(() => null))
   if (!parsed.success) {
@@ -21,7 +28,17 @@ export default defineEventHandler(async (event): Promise<PurchaseResponse> => {
   }
 
   // Test purchase: no payment provider, we only record the fact of purchase.
-  const purchase = await usePurchaseRepo().create({ offerId, deviceId })
+  const { purchase, replayed } = await usePurchaseRepo().create({ offerId, deviceId, idempotencyKey: key.data })
+
+  if (replayed) {
+    // Same key must mean the same request — otherwise the client has a bug.
+    if (purchase.offerId !== offerId || purchase.deviceId !== deviceId) {
+      throw createError({ statusCode: 409, statusMessage: 'Idempotency-Key was already used for a different request' })
+    }
+    setResponseHeader(event, 'Idempotent-Replayed', 'true')
+    return { purchase }
+  }
+
   setResponseStatus(event, 201)
   return { purchase }
 })

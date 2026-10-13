@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'paywall.deviceId'
 
-function uuidV4(): string {
+/** RFC 4122 v4 id; also used for Idempotency-Key. */
+export function uuidV4(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   // Fallback for older WebViews without randomUUID.
   const b = crypto.getRandomValues(new Uint8Array(16))

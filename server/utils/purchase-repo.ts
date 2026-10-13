@@ -5,10 +5,18 @@ import type { Purchase } from '#shared/types/paywall'
 export interface NewPurchase {
   offerId: string
   deviceId: string
+  /** Client-generated key: retries with the same key never create a second purchase. */
+  idempotencyKey?: string
+}
+
+export interface CreateResult {
+  purchase: Purchase
+  /** True when the key was already used and the existing purchase is returned. */
+  replayed: boolean
 }
 
 export interface PurchaseRepo {
-  create(input: NewPurchase): Promise<Purchase>
+  create(input: NewPurchase): Promise<CreateResult>
   listByDevice(deviceId: string): Promise<Purchase[]>
 }
 
@@ -37,13 +45,22 @@ function fromRow(row: PurchaseRow): Purchase {
 function createPostgresRepo(databaseUrl: string): PurchaseRepo {
   const sql = neon(databaseUrl)
   return {
-    async create({ offerId, deviceId }) {
-      const rows = await sql`
-        INSERT INTO purchases (id, offer_id, device_id)
-        VALUES (${randomUUID()}, ${offerId}, ${deviceId})
+    async create({ offerId, deviceId, idempotencyKey }) {
+      // ON CONFLICT makes concurrent retries safe: the unique index decides the winner.
+      const inserted = await sql`
+        INSERT INTO purchases (id, offer_id, device_id, idempotency_key)
+        VALUES (${randomUUID()}, ${offerId}, ${deviceId}, ${idempotencyKey ?? null})
+        ON CONFLICT (idempotency_key) DO NOTHING
         RETURNING id, offer_id, device_id, created_at
       ` as PurchaseRow[]
-      return fromRow(rows[0]!)
+      if (inserted[0]) return { purchase: fromRow(inserted[0]), replayed: false }
+
+      const existing = await sql`
+        SELECT id, offer_id, device_id, created_at
+        FROM purchases
+        WHERE idempotency_key = ${idempotencyKey!}
+      ` as PurchaseRow[]
+      return { purchase: fromRow(existing[0]!), replayed: true }
     },
     async listByDevice(deviceId) {
       const rows = await sql`
@@ -61,12 +78,17 @@ function createPostgresRepo(databaseUrl: string): PurchaseRepo {
 // Local-only fallback so `npm run dev` works before a database is configured.
 function createMemoryRepo(): PurchaseRepo {
   const memory: Purchase[] = []
+  const byKey = new Map<string, Purchase>()
   return {
-    async create({ offerId, deviceId }) {
+    async create({ offerId, deviceId, idempotencyKey }) {
+      const existing = idempotencyKey ? byKey.get(idempotencyKey) : undefined
+      if (existing) return { purchase: existing, replayed: true }
+
       const id = randomUUID()
       const purchase: Purchase = { id, orderNumber: toOrderNumber(id), offerId, deviceId, createdAt: new Date().toISOString() }
       memory.push(purchase)
-      return purchase
+      if (idempotencyKey) byKey.set(idempotencyKey, purchase)
+      return { purchase, replayed: false }
     },
     async listByDevice(deviceId) {
       return memory

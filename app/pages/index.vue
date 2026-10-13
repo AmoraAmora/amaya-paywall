@@ -49,17 +49,30 @@ const mood = computed<MascotMood>(() => {
   return 'happy'
 })
 
+// One key per purchase intent: reused when the user taps "Continue" again after a failure
+// (the first attempt may have succeeded with the response lost), reset when the plan changes.
+let idempotencyKey: string | null = null
+watch(selectedId, () => {
+  idempotencyKey = null
+})
+
 async function buy() {
   if (!selectedOffer.value || purchasing.value) return
   purchasing.value = true
   notice.value = null
+  idempotencyKey ??= uuidV4()
   try {
     const res = await $fetch<PurchaseResponse>('/api/purchase', {
       method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey },
       body: { offerId: selectedOffer.value.id, deviceId: getDeviceId() },
       query: purchaseQuery.value,
+      // Safe to retry a POST only because the server deduplicates by Idempotency-Key.
+      retry: 2,
+      retryDelay: 400,
     })
     purchase.value = res.purchase
+    idempotencyKey = null
   }
   catch {
     notice.value = { kind: 'error', text: 'Purchase failed. Please try again.' }

@@ -74,6 +74,49 @@ describe('POST /api/purchase', () => {
   })
 })
 
+describe('POST /api/purchase idempotency', () => {
+  const withKey = (key: string) => ({ headers: { 'content-type': 'application/json', 'Idempotency-Key': key } })
+
+  it('replays the same purchase for a repeated key instead of creating a second one', async () => {
+    const deviceId = randomUUID()
+    const key = randomUUID()
+
+    const first = await post({ offerId: 'yearly', deviceId }, withKey(key))
+    const second = await post({ offerId: 'yearly', deviceId }, withKey(key))
+
+    expect(first.status).toBe(201)
+    expect(second.status).toBe(200)
+    expect(second.headers.get('idempotent-replayed')).toBe('true')
+    const a = (await first.json() as PurchaseResponse).purchase
+    const b = (await second.json() as PurchaseResponse).purchase
+    expect(b.id).toBe(a.id)
+
+    const { purchases } = await $fetch<PurchasesResponse>('/api/purchases', { query: { deviceId } })
+    expect(purchases).toHaveLength(1)
+  })
+
+  it('creates separate purchases for different keys', async () => {
+    const deviceId = randomUUID()
+    await post({ offerId: 'yearly', deviceId }, withKey(randomUUID()))
+    await post({ offerId: 'yearly', deviceId }, withKey(randomUUID()))
+    const { purchases } = await $fetch<PurchasesResponse>('/api/purchases', { query: { deviceId } })
+    expect(purchases).toHaveLength(2)
+  })
+
+  it('rejects a key reused for a different request with 409', async () => {
+    const deviceId = randomUUID()
+    const key = randomUUID()
+    await post({ offerId: 'yearly', deviceId }, withKey(key))
+    const res = await post({ offerId: 'monthly', deviceId }, withKey(key))
+    expect(res.status).toBe(409)
+  })
+
+  it('rejects a malformed key with 400', async () => {
+    const res = await post({ offerId: 'yearly', deviceId: randomUUID() }, withKey('bad key!'))
+    expect(res.status).toBe(400)
+  })
+})
+
 describe('GET /api/purchases (restore)', () => {
   it('returns only this device’s purchases, newest first', async () => {
     const deviceId = randomUUID()
