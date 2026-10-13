@@ -28,3 +28,7 @@ logs
 
 # Local screenshots for pixel diff
 .screens
+
+# Playwright
+playwright-report
+test-results
