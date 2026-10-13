@@ -102,113 +102,122 @@ watch(purchase, async (value) => {
 </script>
 
 <template>
-  <div class="screen" :class="{ 'screen--success': purchase }">
+  <div class="page">
+    <!-- Glows live on the full-width page so they never get cut at the column edge on tablets/desktop. -->
     <div class="glow glow--violet" aria-hidden="true" />
     <div class="glow glow--pink" aria-hidden="true" />
 
-    <button type="button" class="close" aria-label="Close" @click="close">
-      <IconClose />
-    </button>
+    <div class="screen" :class="{ 'screen--success': purchase }">
+      <button type="button" class="close" aria-label="Close" @click="close">
+        <IconClose />
+      </button>
 
-    <!-- Success -->
-    <template v-if="purchase">
-      <main class="content">
-        <header class="hero">
-          <AppMascot mood="celebrating" />
-          <div class="heading">
-            <span class="pill t-caption"><IconCheck />Purchase complete</span>
-            <h1 ref="successHeading" class="t-title" tabindex="-1">You're all set!</h1>
-            <p class="t-body subtitle">Every game is unlocked. Have fun!</p>
-          </div>
-        </header>
-        <dl class="receipt">
-          <div class="receipt__row">
-            <dt class="t-body-sm">Plan</dt>
-            <dd class="t-card-title">{{ purchasedOffer?.title ?? purchase.offerId }}</dd>
-          </div>
-          <div v-if="purchasedOffer" class="receipt__row">
-            <dt class="t-body-sm">Price</dt>
-            <dd class="t-card-title">{{ purchasedOffer.priceLabel }} / {{ purchasedOffer.period }}</dd>
-          </div>
-          <div class="receipt__row">
-            <dt class="t-body-sm">Order</dt>
-            <dd class="t-card-title">#{{ purchase.orderNumber }}</dd>
-          </div>
-        </dl>
-      </main>
-      <footer class="footer">
-        <PrimaryButton @click="close">Start playing</PrimaryButton>
-      </footer>
-    </template>
+      <!-- Success -->
+      <template v-if="purchase">
+        <main class="content">
+          <header class="hero">
+            <AppMascot mood="celebrating" />
+            <div class="heading">
+              <span class="pill t-caption"><IconCheck />Purchase complete</span>
+              <h1 ref="successHeading" class="t-title" tabindex="-1">You're all set!</h1>
+              <p class="t-body subtitle">Every game is unlocked. Have fun!</p>
+            </div>
+          </header>
+          <dl class="receipt">
+            <div class="receipt__row">
+              <dt class="t-body-sm">Plan</dt>
+              <dd class="t-card-title">{{ purchasedOffer?.title ?? purchase.offerId }}</dd>
+            </div>
+            <div v-if="purchasedOffer" class="receipt__row">
+              <dt class="t-body-sm">Price</dt>
+              <dd class="t-card-title">{{ purchasedOffer.priceLabel }} / {{ purchasedOffer.period }}</dd>
+            </div>
+            <div class="receipt__row">
+              <dt class="t-body-sm">Order</dt>
+              <dd class="t-card-title">#{{ purchase.orderNumber }}</dd>
+            </div>
+          </dl>
+        </main>
+        <footer class="footer">
+          <PrimaryButton @click="close">Start playing</PrimaryButton>
+        </footer>
+      </template>
 
-    <!-- Paywall -->
-    <template v-else>
-      <main class="content">
-        <header class="hero">
-          <AppMascot :mood="mood" />
-          <div class="heading">
-            <h1 class="t-title">Unlock all games</h1>
-            <p class="t-body subtitle">Every game, every level and zero ads. Made for curious little players.</p>
-          </div>
-        </header>
+      <!-- Paywall -->
+      <template v-else>
+        <main class="content">
+          <header class="hero">
+            <AppMascot :mood="mood" />
+            <div class="heading">
+              <h1 class="t-title">Unlock all games</h1>
+              <p class="t-body subtitle">Every game, every level and zero ads. Made for curious little players.</p>
+            </div>
+          </header>
 
-        <ul class="benefits">
-          <BenefitItem>100+ games, new ones every week</BenefitItem>
-          <BenefitItem>No ads, safe for kids</BenefitItem>
-          <BenefitItem>Play offline on any device</BenefitItem>
-        </ul>
+          <ul class="benefits">
+            <BenefitItem>100+ games, new ones every week</BenefitItem>
+            <BenefitItem>No ads, safe for kids</BenefitItem>
+            <BenefitItem>Play offline on any device</BenefitItem>
+          </ul>
 
-        <div class="offers" :class="{ 'offers--busy': purchasing }">
-          <template v-if="status === 'pending' || status === 'idle'">
-            <SkeletonCard v-for="i in 2" :key="i" />
-            <span class="visually-hidden" role="status">Loading plans…</span>
-          </template>
-          <ErrorBox
-            v-else-if="status === 'error'"
-            title="Couldn't load plans"
-            message="Check your connection and try again."
-            @retry="refresh()"
-          />
-          <div v-else class="offers__list" role="radiogroup" aria-label="Choose a plan">
-            <OfferCard
-              v-for="offer in offers"
-              :key="offer.id"
-              :offer="offer"
-              :selected="offer.id === selectedId"
-              :disabled="purchasing"
-              @select="selectedId = offer.id"
+          <div class="offers" :class="{ 'offers--busy': purchasing }">
+            <template v-if="status === 'pending' || status === 'idle'">
+              <SkeletonCard v-for="i in 2" :key="i" />
+              <span class="visually-hidden" role="status">Loading plans…</span>
+            </template>
+            <ErrorBox
+              v-else-if="status === 'error'"
+              title="Couldn't load plans"
+              message="Check your connection and try again."
+              @retry="refresh()"
             />
+            <div v-else class="offers__list" role="radiogroup" aria-label="Choose a plan">
+              <OfferCard
+                v-for="offer in offers"
+                :key="offer.id"
+                :offer="offer"
+                :selected="offer.id === selectedId"
+                :disabled="purchasing"
+                @select="selectedId = offer.id"
+              />
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
 
-      <footer class="footer">
-        <p
-          v-if="notice"
-          class="notice t-body-sm"
-          :class="`notice--${notice.kind}`"
-          role="status"
-        >
-          {{ notice.text }}
-        </p>
-        <PrimaryButton :loading="purchasing" :disabled="!selectedOffer" @click="buy">
-          Continue
-        </PrimaryButton>
-        <button
-          type="button"
-          class="restore t-link"
-          :class="{ 'restore--dimmed': purchasing }"
-          :disabled="purchasing || restoring"
-          @click="restore"
-        >
-          {{ restoring ? 'Restoring…' : 'Restore purchases' }}
-        </button>
-      </footer>
-    </template>
+        <footer class="footer">
+          <p
+            v-if="notice"
+            class="notice t-body-sm"
+            :class="`notice--${notice.kind}`"
+            role="status"
+          >
+            {{ notice.text }}
+          </p>
+          <PrimaryButton :loading="purchasing" :disabled="!selectedOffer" @click="buy">
+            Continue
+          </PrimaryButton>
+          <button
+            type="button"
+            class="restore t-link"
+            :class="{ 'restore--dimmed': purchasing }"
+            :disabled="purchasing || restoring"
+            @click="restore"
+          >
+            {{ restoring ? 'Restoring…' : 'Restore purchases' }}
+          </button>
+        </footer>
+      </template>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.page {
+  position: relative;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
 .screen {
   position: relative;
   display: flex;
@@ -219,12 +228,16 @@ watch(purchase, async (value) => {
   min-height: 100dvh;
   margin-inline: auto;
   padding: calc(40px + env(safe-area-inset-top)) var(--space-24) calc(var(--space-24) + env(safe-area-inset-bottom));
-  overflow: hidden;
 }
 .screen--success {
   padding-top: calc(96px + env(safe-area-inset-top));
 }
 
+/*
+ * Figma layer blur 100 ≈ CSS blur(50px).
+ * Figma positions (x = -110 / 230 in the 390px frame) are anchored to the column centre:
+ * calc(50% - 195px) is the left edge of a 390px column, so phones match the mockup exactly.
+ */
 .glow {
   position: absolute;
   border-radius: 50%;
@@ -233,7 +246,7 @@ watch(purchase, async (value) => {
 }
 .glow--violet {
   top: -90px;
-  left: -110px;
+  left: calc(50% - 195px - 110px);
   width: 300px;
   height: 300px;
   background: var(--color-glow-violet);
@@ -241,7 +254,7 @@ watch(purchase, async (value) => {
 }
 .glow--pink {
   top: 30px;
-  right: -100px;
+  left: calc(50% - 195px + 230px);
   width: 260px;
   height: 260px;
   background: var(--color-glow-pink);
