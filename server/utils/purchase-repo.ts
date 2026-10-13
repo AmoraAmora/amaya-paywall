@@ -81,7 +81,11 @@ let repo: PurchaseRepo | undefined
 export function usePurchaseRepo(): PurchaseRepo {
   if (repo) return repo
   const url = process.env.DATABASE_URL
-  if (url) {
+  if (process.env.PURCHASE_STORAGE === 'memory') {
+    // Explicit opt-in used by the test suite so it never touches a real database.
+    repo = createMemoryRepo()
+  }
+  else if (url) {
     repo = createPostgresRepo(url)
   }
   else if (import.meta.dev) {
